@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<title>Simulación de Dos Autos con Distancia Personalizada</title>
+<style>
+  body { text-align:center; font-family:Arial; background:#f0f0f0; }
+  canvas { background:white; border:1px solid #333; margin-top:10px; }
+  .panel { margin:10px auto; }
+</style>
+</head>
+<body>
+
+<h2>🚗 Simulación de dos autos 🚙</h2>
+<p>Escala: 1 h = 10 s | 10 km = 1 cm</p>
+
+<div class="panel">
+  <label>Velocidad Auto A (km/h): </label>
+  <input type="number" id="velA" value="20" min="1">
+  <label>Velocidad Auto B (km/h): </label>
+  <input type="number" id="velB" value="20" min="1">
+  <label>Retraso salida Auto B (h): </label>
+  <input type="number" id="delay" value="2" min="0" step="0.1">
+  <label>Distancia inicial (km): </label>
+  <input type="number" id="distancia" value="200" min="10" step="10">
+  <button onclick="iniciar()">Iniciar simulación</button>
+</div>
+
+<canvas id="canvas" width="1200" height="300"></canvas>
+
+<script>
+const canvas = document.getElementById("canvas");
+const ctx = canvas.getContext("2d");
+
+const escalaKm = 10;     // 10 km = 1 cm
+const pxPorCm = 37.8;    // 1 cm ≈ 37.8 px
+const escala = pxPorCm / escalaKm; // px/km
+
+let distanciaKm = 200;   // valor inicial por defecto
+let distanciaPx = distanciaKm * escala;
+
+let t = 0;
+let anim;
+
+function dibujarGrid() {
+  ctx.strokeStyle = "#ddd";
+  ctx.beginPath();
+  for (let i = 0; i <= distanciaKm; i += 10) {
+    const x = i * escala;
+    ctx.moveTo(x, 0);
+    ctx.lineTo(x, canvas.height);
+  }
+  ctx.stroke();
+
+  ctx.fillStyle = "black";
+  for (let i = 0; i <= distanciaKm; i += 20) {
+    const x = i * escala;
+    ctx.fillText(i + " km", x + 2, 15);
+  }
+
+  // Dibujar líneas base (pistas)
+  ctx.strokeStyle = "#ccc";
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.moveTo(0, 120);
+  ctx.lineTo(distanciaPx, 120);
+  ctx.moveTo(0, 180);
+  ctx.lineTo(distanciaPx, 180);
+  ctx.stroke();
+}
+
+function iniciar() {
+  cancelAnimationFrame(anim);
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  t = 0;
+
+  const velA = parseFloat(document.getElementById("velA").value);
+  const velB = parseFloat(document.getElementById("velB").value);
+  const delay = parseFloat(document.getElementById("delay").value);
+  distanciaKm = parseFloat(document.getElementById("distancia").value);
+  distanciaPx = distanciaKm * escala;
+
+  dibujarGrid();
+
+  const tiempoEscala = 10; // 10 s = 1 h
+  const xA0 = 0;           // Auto A inicia en 0 km
+  const xB0 = distanciaPx; // Auto B inicia en distancia indicada
+
+  function animar() {
+    const horas = (t / 1000) / tiempoEscala;
+
+    // Posiciones en píxeles
+    const xA = xA0 + velA * horas * escala;
+    const xB = xB0 - velB * Math.max(0, horas - delay) * escala;
+
+    // Redibujar todo
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    dibujarGrid();
+
+    // Trayectorias
+    ctx.strokeStyle = "rgba(0,0,255,0.4)";
+    ctx.lineWidth = 4;
+    ctx.beginPath();
+    ctx.moveTo(xA0, 120);
+    ctx.lineTo(Math.min(xA, xB0), 120);
+    ctx.stroke();
+
+    ctx.strokeStyle = "rgba(255,0,0,0.4)";
+    ctx.beginPath();
+    ctx.moveTo(xB0, 180);
+    ctx.lineTo(Math.max(xB, xA0), 180);
+    ctx.stroke();
+
+    // Autos
+    ctx.fillStyle = "blue";
+    ctx.fillRect(xA - 10, 110, 20, 20);
+    ctx.fillStyle = "red";
+    ctx.fillRect(xB - 10, 170, 20, 20);
+
+    // Datos
+    const distanciaActual = Math.max(0, (xB - xA) / escala).toFixed(1);
+    ctx.fillStyle = "black";
+    ctx.fillText(`Tiempo: ${horas.toFixed(2)} h`, 10, 280);
+    ctx.fillText(`Distancia entre autos: ${distanciaActual} km`, 180, 280);
+
+    // Condición de encuentro
+    if (xA >= xB) {
+      ctx.fillStyle = "green";
+      ctx.fillText("🚗💥🚙 ¡Los autos se encontraron!", 500, 280);
+      return;
+    }
+
+    t += 50;
+    anim = requestAnimationFrame(animar);
+  }
+
+  animar();
+}
+
+dibujarGrid();
+</script>
+
+</body>
+</html>

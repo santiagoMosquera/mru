@@ -1,0 +1,430 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>MRU – Dos Monster Trucks</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<style>
+  :root{
+    --bg:#0f172a;
+    --panel:#111827;
+    --accent:#22d3ee;
+    --text:#e5e7eb;
+    --track:#374151;
+    --lane:#1f2937;
+  }
+  *{box-sizing:border-box}
+  body{
+    margin:0;
+    font-family:system-ui, Arial, sans-serif;
+    background:var(--bg);
+    color:var(--text);
+  }
+  header{
+    padding:20px;
+    text-align:center;
+  }
+  h1{margin:0 0 6px;font-weight:700;color:var(--accent)}
+  p.sub{margin:0;color:#9ca3af}
+  .wrap{
+    max-width:1200px;
+    margin:0 auto;
+    padding:16px;
+  }
+  .controls{
+    background:var(--panel);
+    border:1px solid #1f2937;
+    border-radius:12px;
+    padding:16px;
+    display:grid;
+    grid-template-columns: repeat(6, minmax(120px,1fr));
+    gap:12px;
+  }
+  .controls label{
+    font-size:12px; color:#a3a3a3; display:block; margin-bottom:6px;
+  }
+  .controls input{
+    width:100%; padding:10px; border-radius:8px;
+    border:1px solid #374151; background:#0b1220; color:var(--text);
+    text-align:center; font-weight:600;
+  }
+  .controls .btns{
+    grid-column: span 6;
+    display:flex; gap:10px; flex-wrap:wrap;
+  }
+  button{
+    padding:10px 14px; border:0; border-radius:10px; cursor:pointer;
+    font-weight:700;
+  }
+  .primary{background:var(--accent); color:#0b1220}
+  .ghost{background:#0b1220; color:#cbd5e1; border:1px solid #334155}
+  .danger{background:#ef4444; color:white}
+
+  .stats{
+    display:flex; gap:16px; flex-wrap:wrap; margin:16px 0;
+  }
+  .card{
+    background:var(--panel);
+    border:1px solid #1f2937;
+    border-radius:12px; padding:14px 16px;
+    min-width:220px;
+  }
+  .card h3{margin:0 0 4px; font-size:14px; color:#94a3b8}
+  .card .val{font-size:20px; font-weight:800}
+  .track-wrap{
+    background:var(--panel);
+    border:1px solid #1f2937;
+    border-radius:12px; padding:16px; overflow:auto;
+  }
+  #track{
+    position:relative;
+    height:140px;
+    margin:0 auto;
+    background:var(--track);
+    border-radius:10px;
+    border:2px solid #111827;
+  }
+  .lane{
+    position:absolute; inset:0;
+    background: repeating-linear-gradient(
+      to right,
+      transparent 0, transparent 90px,
+      rgba(255,255,255,0.08) 90px, rgba(255,255,255,0.08) 92px
+    );
+  }
+  .truck{
+    position:absolute; bottom:10px; width:72px; height:48px;
+    border-radius:8px; box-shadow:0 6px 20px rgba(0,0,0,.35);
+    display:flex; align-items:center; justify-content:center;
+    font-size:22px;
+    user-select:none;
+  }
+  .t1{ background:#10b981 } /* verde */
+  .t2{ background:#f59e0b } /* amarillo */
+  .label{
+    position:absolute; top:-26px; font-size:12px; background:#0008; padding:2px 6px; border-radius:6px
+  }
+  canvas{ background:#fff; border-radius:12px; margin-top:16px }
+  .note{color:#9ca3af; font-size:12px}
+</style>
+</head>
+<body>
+  <header>
+    <h1>🚛 MRU – Encuentro de dos Monster Trucks</h1>
+    <p class="sub">Escala: <strong>1 h = 10 s</strong> · <strong>1 km = 1 cm ≈ 10 px</strong></p>
+  </header>
+
+  <div class="wrap">
+    <!-- CONTROLES -->
+    <div class="controls">
+      <div>
+        <label>Velocidad Truck A (izq→der) [km/h]</label>
+        <input type="number" id="v1" value="30" min="0" step="1">
+      </div>
+      <div>
+        <label>Velocidad Truck B (der→izq) [km/h]</label>
+        <input type="number" id="v2" value="30" min="0" step="1">
+      </div>
+      <div>
+        <label>Distancia inicial entre ellos [km]</label>
+        <input type="number" id="d0" value="10" min="0" step="0.1">
+      </div>
+      <div>
+        <label>Resolución de muestreo (ms)</label>
+        <input type="number" id="dtMs" value="100" min="16" step="1">
+      </div>
+      <div>
+        <label>px por cm (≈10 por defecto)</label>
+        <input type="number" id="pxCm" value="10" min="1" step="1">
+      </div>
+      <div>
+        <label>Mostrar guía de km</label>
+        <input type="number" id="gridKm" value="1" min="1" step="1" title="Línea cada N km">
+      </div>
+
+      <div class="btns">
+        <button class="primary" id="startBtn">▶ Iniciar / Reiniciar</button>
+        <button class="ghost" id="pauseBtn">⏸ Pausar</button>
+        <button class="danger" id="resetBtn">⟲ Reset</button>
+      </div>
+    </div>
+
+    <!-- ESTADÍSTICAS -->
+    <div class="stats">
+      <div class="card">
+        <h3>Tiempo simulado</h3>
+        <div class="val" id="tSim">0.00 h (00:00)</div>
+        <div class="note">1 h de simulación = 10 s reales</div>
+      </div>
+      <div class="card">
+        <h3>Distancia entre trucks</h3>
+        <div class="val" id="dist">10.00 km</div>
+        <div class="note">Se actualiza en tiempo real</div>
+      </div>
+      <div class="card">
+        <h3>Tiempo de encuentro (teórico)</h3>
+        <div class="val" id="tMeet">—</div>
+        <div class="note">t = D / (v₁ + v₂)</div>
+      </div>
+      <div class="card">
+        <h3>Estado</h3>
+        <div class="val" id="estado">Listo</div>
+      </div>
+    </div>
+
+    <!-- PISTA -->
+    <div class="track-wrap">
+      <div id="track">
+        <div class="lane" id="lane"></div>
+        <div class="truck t1" id="truckA"><span class="emoji">🛻</span><div class="label">Truck A</div></div>
+        <div class="truck t2" id="truckB"><span class="emoji">🛻</span><div class="label">Truck B</div></div>
+      </div>
+      <div class="note" style="margin-top:8px">
+        La pista se ajusta automáticamente a la distancia inicial elegida. Cada línea vertical marca los km según tu ajuste.
+      </div>
+      <canvas id="chart" height="320"></canvas>
+    </div>
+  </div>
+
+<script>
+/* ======= Parámetros de escala =======
+   - 1 hora de simulación = 10 segundos reales
+   - 1 km = 1 cm. Tomamos 1 cm ≈ 10 px (ajustable)
+*/
+const HOURS_PER_REAL_SECOND = 1 / 10; // 1h sim en 10s reales → 0.1 h por 1s real
+let PIXELS_PER_CM = 10;               // editable por usuario
+let PIXELS_PER_KM = PIXELS_PER_CM;    // 1 km = 1 cm
+
+// DOM
+const trackEl = document.getElementById('track');
+const laneEl  = document.getElementById('lane');
+const truckA  = document.getElementById('truckA');
+const truckB  = document.getElementById('truckB');
+
+const v1Input = document.getElementById('v1');
+const v2Input = document.getElementById('v2');
+const d0Input = document.getElementById('d0');
+const dtMsInput = document.getElementById('dtMs');
+const pxCmInput = document.getElementById('pxCm');
+const gridKmInput = document.getElementById('gridKm');
+
+const tSimEl = document.getElementById('tSim');
+const distEl = document.getElementById('dist');
+const tMeetEl = document.getElementById('tMeet');
+const estadoEl = document.getElementById('estado');
+
+const startBtn = document.getElementById('startBtn');
+const pauseBtn = document.getElementById('pauseBtn');
+const resetBtn = document.getElementById('resetBtn');
+
+// Estado de simulación
+let tHours = 0;        // tiempo simulado (h)
+let x1 = 0;            // posición de A (km, desde la izquierda)
+let x2 = 10;           // posición de B (km, desde la izquierda)
+let D0 = 10;           // distancia inicial (km)
+let v1 = 30;           // km/h
+let v2 = 30;           // km/h
+let dtMs = 100;        // paso real (ms)
+let running = false;
+let rafId = null;
+let lastReal = null;
+
+// Gráfica (distancia vs tiempo)
+const ctx = document.getElementById('chart').getContext('2d');
+const distData = { labels: [], data: [] };
+const distChart = new Chart(ctx, {
+  type: 'line',
+  data: {
+    labels: distData.labels,
+    datasets: [{
+      label: 'Distancia entre trucks (km)',
+      data: distData.data,
+      borderWidth: 3,
+      fill: true,
+      pointRadius: 0,
+      backgroundColor: 'rgba(34,211,238,0.15)',
+      borderColor: '#22d3ee',
+      tension: 0.2
+    }]
+  },
+  options: {
+    animation: false,
+    scales: {
+      x: { title: { display:true, text: 'Tiempo (h)' } },
+      y: {
+        title: { display:true, text: 'Distancia (km)' },
+        beginAtZero: true
+      }
+    }
+  }
+});
+
+// Utilidades
+function hhmmFromHours(h){
+  const totalMin = Math.floor(h*60);
+  const mm = String(totalMin % 60).padStart(2,'0');
+  const hh = Math.floor(totalMin/60);
+  return `${String(hh).padStart(2,'0')}:${mm}`;
+}
+
+function computeMeetTimeHours(D, v1, v2){
+  const sum = v1 + v2;
+  if (sum <= 0) return null; // nunca se encuentran
+  return D / sum;
+}
+
+function layoutTrack(){
+  // Ajustar escala px en función del input
+  PIXELS_PER_CM = Math.max(1, Number(pxCmInput.value || 10));
+  PIXELS_PER_KM = PIXELS_PER_CM; // 1 km = 1 cm
+
+  // Ancho de pista: D0 km + márgenes
+  const marginKm = 2;
+  const widthPx = Math.max( (D0 + marginKm*2) * PIXELS_PER_KM, 600 );
+  trackEl.style.width = `${widthPx}px`;
+
+  // Líneas de guía (cada N km)
+  const stepKm = Math.max(1, Number(gridKmInput.value||1));
+  const bg = buildGridBackground(stepKm);
+  laneEl.style.background = bg;
+}
+
+function buildGridBackground(stepKm){
+  const stepPx = stepKm * PIXELS_PER_KM;
+  // patrón de líneas verticales
+  return `
+    linear-gradient(#111827, #111827),
+    repeating-linear-gradient(
+      to right,
+      transparent 0, transparent ${stepPx-2}px,
+      rgba(255,255,255,0.10) ${stepPx-2}px, rgba(255,255,255,0.10) ${stepPx}px
+    )
+  `;
+}
+
+function placeTrucks(){
+  const wA = truckA.offsetWidth || 72;
+  const wB = truckB.offsetWidth || 72;
+
+  truckA.style.left = `${x1*PIXELS_PER_KM}px`;
+  truckB.style.left = `${x2*PIXELS_PER_KM - wB}px`;
+}
+
+function resetSim(){
+  v1 = Math.max(0, Number(v1Input.value||0));
+  v2 = Math.max(0, Number(v2Input.value||0));
+  D0 = Math.max(0, Number(d0Input.value||0));
+  dtMs = Math.max(16, Number(dtMsInput.value||100));
+
+  tHours = 0;
+  x1 = 0;
+  x2 = D0;
+
+  distData.labels.length = 0;
+  distData.data.length = 0;
+  distChart.update();
+
+  layoutTrack();
+  placeTrucks();
+
+  const tMeet = computeMeetTimeHours(D0, v1, v2);
+  if (tMeet == null){
+    tMeetEl.textContent = 'No se encuentran';
+  } else {
+    tMeetEl.textContent = `${tMeet.toFixed(2)} h (${hhmmFromHours(tMeet)})`;
+  }
+  tSimEl.textContent = `0.00 h (00:00)`;
+  distEl.textContent  = `${D0.toFixed(2)} km`;
+  estadoEl.textContent = 'Listo';
+}
+
+function step(realDeltaMs){
+  // convertir delta real (ms) a horas simuladas
+  // 1s real → 0.1 h sim → delta_h = realDeltaSec * 0.1
+  const deltaH = (realDeltaMs/1000) * HOURS_PER_REAL_SECOND;
+
+  tHours += deltaH;
+  // MRU: x1 = v1 * t ; x2 = D0 - v2 * t
+  x1 = v1 * tHours;
+  x2 = D0 - v2 * tHours;
+
+  let d = x2 - x1; // distancia entre ellos
+  if (d <= 0){
+    d = 0;
+  }
+
+  // Actualizar UI
+  placeTrucks();
+  tSimEl.textContent = `${tHours.toFixed(2)} h (${hhmmFromHours(tHours)})`;
+  distEl.textContent  = `${d.toFixed(2)} km`;
+
+  // Graficar
+  distData.labels.push(Number(tHours.toFixed(2)));
+  distData.data.push(Number(d.toFixed(2)));
+  distChart.update();
+
+  // Parar si se encontraron o si cualquiera pasó de su extremo
+  if (d <= 0){
+    running = false;
+    estadoEl.textContent = `¡Se encontraron! t ≈ ${tHours.toFixed(2)} h`;
+    return false;
+  }
+  return true;
+}
+
+function loop(timestamp){
+  if (!running){ return; }
+  if (lastReal == null){ lastReal = timestamp; }
+  const delta = timestamp - lastReal;
+
+  if (delta >= dtMs){
+    // avanzamos en pasos de dtMs
+    const steps = Math.floor(delta / dtMs);
+    for(let i=0;i<steps;i++){
+      const cont = step(dtMs);
+      if (!cont){ lastReal = timestamp; return; }
+    }
+    lastReal += steps*dtMs;
+  }
+  rafId = requestAnimationFrame(loop);
+}
+
+// Botones
+startBtn.addEventListener('click', ()=>{
+  cancelAnimationFrame(rafId);
+  running = true;
+  lastReal = null;
+  resetSim();
+  estadoEl.textContent = 'Simulando…';
+  rafId = requestAnimationFrame(loop);
+});
+
+pauseBtn.addEventListener('click', ()=>{
+  if (running){
+    running = false;
+    estadoEl.textContent = 'Pausado';
+    cancelAnimationFrame(rafId);
+  } else {
+    running = true;
+    estadoEl.textContent = 'Simulando…';
+    lastReal = null;
+    rafId = requestAnimationFrame(loop);
+  }
+});
+
+resetBtn.addEventListener('click', ()=>{
+  running = false;
+  cancelAnimationFrame(rafId);
+  resetSim();
+});
+
+// Recalcular al cambiar px/cm o rejilla
+pxCmInput.addEventListener('change', layoutTrack);
+gridKmInput.addEventListener('change', layoutTrack);
+
+// Inicial
+resetSim();
+</script>
+</body>
+</html>

@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<title>Simulaci¨®n de Monster Trucks</title>
+<style>
+  body { text-align:center; font-family:Arial; background:#f0f0f0; }
+  canvas { background:white; border:1px solid #333; margin-top:10px; }
+  .panel { margin:10px auto; }
+</style>
+</head>
+<body>
+<h2>CLASE DE FISICA</h2>
+<h2>PROFE ALFONSITO</h2>
+<h2>Simulacion de Monster Trucks en la misma direccion</h2>
+<p>Escala: 1 h = 10 s | 10 km = 1 cm</p>
+
+<div class="panel">
+  <label>Velocidad Monster A (km/h): </label>
+  <input type="number" id="vel1" value="30" min="1">
+  <label>Velocidad Monster B (km/h): </label>
+  <input type="number" id="vel2" value="50" min="1">
+  <label>Retraso Monster B (h): </label>
+  <input type="number" id="delay" value="0" min="0" step="0.1">
+  <label>Distancia inicial (Monster A adelante) (km): </label>
+  <input type="number" id="distancia" value="50" min="0" step="1">
+  <button onclick="iniciar()">Iniciar simulacion</button>
+</div>
+
+<canvas id="canvas" width="1800" height="320"></canvas>
+
+<script>
+const canvas = document.getElementById("canvas");
+const ctx = canvas.getContext("2d");
+
+const escalaKm = 10;          
+const pxPorCm = 37.8;         
+const escala = pxPorCm / escalaKm; 
+let anim;
+let tiempoSim = 0;
+
+// --- Cargar im¨¢genes de Monster Trucks ---
+const monsterA = new Image();
+const monsterB = new Image();
+
+// Puedes reemplazar estas URLs por tus propios PNGs
+monsterA.src = "https://i.pinimg.com/originals/b7/50/26/b75026551a6cea490a380541c14182ad.jpg"; // azul
+monsterB.src = "https://imgcdn.stablediffusionweb.com/2024/9/5/c3c24299-3836-46fa-9956-cc5a3926ba2e.jpg"; // rojo
+
+function dibujarGrid(maxKm) {
+  ctx.strokeStyle = "#eee";
+  ctx.beginPath();
+  for (let i = 0; i <= maxKm; i += 10) {
+    const x = i * escala;
+    ctx.moveTo(x, 0);
+    ctx.lineTo(x, canvas.height);
+  }
+  ctx.stroke();
+
+  ctx.fillStyle = "black";
+  for (let i = 0; i <= maxKm; i += 20) {
+    const x = i * escala;
+    ctx.fillText(i + " km", x + 2, 15);
+  }
+
+  ctx.strokeStyle = "#ccc";
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.moveTo(0, 120);
+  ctx.lineTo(maxKm * escala, 120);
+  ctx.moveTo(0, 200);
+  ctx.lineTo(maxKm * escala, 200);
+  ctx.stroke();
+}
+
+function iniciar() {
+  cancelAnimationFrame(anim);
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  tiempoSim = 0;
+
+  const v1 = parseFloat(document.getElementById("vel1").value);
+  const v2 = parseFloat(document.getElementById("vel2").value);
+  const delay = parseFloat(document.getElementById("delay").value);
+  const d0 = parseFloat(document.getElementById("distancia").value);
+  const tiempoEscala = 10;
+
+  // --- C¨¢lculo f¨ªsico correcto ---
+  let tEncuentro = null, xEncuentro = null;
+  if (v2 > v1) {
+    tEncuentro = (v2 * delay + d0) / (v2 - v1);  
+    xEncuentro = d0 + v1 * tEncuentro;           
+  }
+
+  const maxKm = xEncuentro ? xEncuentro * 1.4 : d0 + 200;
+  dibujarGrid(maxKm);
+
+  function animar() {
+    const horas = tiempoSim / tiempoEscala;
+    const x1 = d0 + v1 * horas;
+    const x2 = v2 * Math.max(0, horas - delay);
+
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    dibujarGrid(maxKm);
+
+    // Trayectorias
+    ctx.strokeStyle = "rgba(0,0,255,0.3)";
+    ctx.lineWidth = 4;
+    ctx.beginPath();
+    ctx.moveTo(d0 * escala, 120);
+    ctx.lineTo(x1 * escala, 120);
+    ctx.stroke();
+
+    ctx.strokeStyle = "rgba(255,0,0,0.3)";
+    ctx.beginPath();
+    ctx.moveTo(0, 200);
+    ctx.lineTo(x2 * escala, 200);
+    ctx.stroke();
+
+    // Dibujar Monster Trucks
+    const ancho = 80;
+    const alto = 80;
+    ctx.drawImage(monsterA, x1 * escala - ancho / 2, 80, ancho, alto);
+    ctx.drawImage(monsterB, x2 * escala - ancho / 2, 160, ancho, alto);
+
+    // Bandera del punto de encuentro
+    if (xEncuentro) {
+      const xFlag = xEncuentro * escala;
+      ctx.fillStyle = "green";
+      ctx.fillRect(xFlag - 2, 60, 4, 160);
+      ctx.fillText("??", xFlag - 8, 60);
+      ctx.fillText(`Km ${xEncuentro.toFixed(1)}`, xFlag - 25, 50);
+    }
+
+    // Datos en tiempo real
+    const distancia = Math.abs(x1 - x2).toFixed(2);
+    ctx.fillStyle = "black";
+    ctx.fillText(`Tiempo: ${horas.toFixed(2)} h`, 10, 300);
+    ctx.fillText(`Distancia entre autos: ${distancia} km`, 200, 300);
+
+    if (xEncuentro && horas >= tEncuentro) {
+      ctx.fillStyle = "green";
+      ctx.fillText(
+        `?????? ?Los Monster Trucks se encontraron en el km ${xEncuentro.toFixed(1)} a las ${tEncuentro.toFixed(2)} h!`,
+        420, 300
+      );
+      return;
+    }
+
+    if (!xEncuentro && horas > 10) {
+      ctx.fillStyle = "red";
+      ctx.fillText("? No se encontrar¨¢n (el segundo no alcanza al primero).", 480, 300);
+      return;
+    }
+
+    tiempoSim += 0.05;
+    anim = requestAnimationFrame(animar);
+  }
+
+  animar();
+}
+</script>
+
+</body>
+</html>
